@@ -3,6 +3,9 @@ package com.boxproject.BoxProject.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import org.locationtech.jts.geom.Point;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -47,10 +50,11 @@ public class Venue {
     @Column(name = "postal_code", nullable = false, length = 10)
     private String postalCode;
 
-    /*
-     * These values represent the PostGIS geography column. They are populated
-     * by VenueRepository using ST_X/ST_Y and written with ST_MakePoint.
-     */
+    @JdbcTypeCode(SqlTypes.GEOGRAPHY)
+    @Column(nullable = false)
+    private Point location;
+
+    // API-facing coordinate values derived from the persisted location point.
     @Transient
     private BigDecimal latitude;
 
@@ -71,4 +75,16 @@ public class Venue {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @PrePersist
+    public void prePersist() {
+        Instant now = Instant.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = Instant.now();
+    }
 }

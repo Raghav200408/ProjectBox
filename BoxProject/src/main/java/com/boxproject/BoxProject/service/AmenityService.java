@@ -21,15 +21,17 @@ public class AmenityService {
     }
 
     public AmenityResponseDTO createAmenity(AmenityRequestDTO request) {
-        return toResponse(amenityRepository.create(request));
+        Amenity amenity = new Amenity();
+        applyRequest(amenity, request);
+        return toResponse(amenityRepository.save(amenity));
     }
 
     @Transactional(readOnly = true)
     public List<AmenityResponseDTO> getAmenities(boolean activeOnly) {
-        return amenityRepository.findAll(activeOnly)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        List<Amenity> amenities = activeOnly
+                ? amenityRepository.findAllByActiveTrueOrderByNameAscIdAsc()
+                : amenityRepository.findAllByOrderByNameAscIdAsc();
+        return amenities.stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -40,15 +42,22 @@ public class AmenityService {
     }
 
     public AmenityResponseDTO updateAmenity(Long amenityId, AmenityRequestDTO request) {
-        return amenityRepository.update(amenityId, request)
-                .map(this::toResponse)
+        Amenity amenity = amenityRepository.findById(amenityId)
                 .orElseThrow(() -> new AmenityNotFoundException(amenityId));
+        applyRequest(amenity, request);
+        return toResponse(amenityRepository.save(amenity));
     }
 
     public void deleteAmenity(Long amenityId) {
-        if (!amenityRepository.deactivate(amenityId)) {
-            throw new AmenityNotFoundException(amenityId);
-        }
+        Amenity amenity = amenityRepository.findById(amenityId)
+                .orElseThrow(() -> new AmenityNotFoundException(amenityId));
+        amenity.setActive(false);
+        amenityRepository.save(amenity);
+    }
+
+    private static void applyRequest(Amenity amenity, AmenityRequestDTO request) {
+        amenity.setName(request.getName().trim());
+        amenity.setActive(request.getActive() == null || request.getActive());
     }
 
     private AmenityResponseDTO toResponse(Amenity amenity) {

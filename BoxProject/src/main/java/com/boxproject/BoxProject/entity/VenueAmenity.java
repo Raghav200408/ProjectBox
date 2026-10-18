@@ -7,7 +7,13 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
-@Table(name = "venue_amenities")
+@Table(
+        name = "venue_amenities",
+        uniqueConstraints = @UniqueConstraint(
+                name = "venue_amenities_venue_amenity_unique",
+                columnNames = {"venue_id", "amenity_id"}
+        )
+)
 public class VenueAmenity {
 
     @Id
