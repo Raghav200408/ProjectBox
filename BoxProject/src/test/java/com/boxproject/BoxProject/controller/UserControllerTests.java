@@ -32,6 +32,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 @Transactional
 class UserControllerTests {
+    @ParameterizedTest
+    @CsvSource({"/api/users, PLAYER", "/api/users/player, PLAYER",
+            "/api/users/venueOwner, VENUE_OWNER", "/api/users/appOwner, APP_OWNER"})
+    @WithAnonymousUser
+    void registrationIsAccessibleWithoutToken(String endpoint, String role) throws Exception {
+        mvc.perform(post(endpoint).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(details("9876543210", "register@example.com"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value(role));
+        mvc.perform(get("/api/users/all")).andExpect(status().isUnauthorized());
+    }
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper mapper;
@@ -40,10 +51,11 @@ class UserControllerTests {
 
     @Test
     void createsUserAndReturnsDtoWithoutPassword() throws Exception {
-        create(details("+919876543210", "Arjun@Example.com"))
+        create(details("9876543210", "Arjun@Example.com"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userId").isNotEmpty())
                 .andExpect(jsonPath("$.fullName").value("Arjun Kumar"))
+                .andExpect(jsonPath("$.phone").value("9876543210"))
                 .andExpect(jsonPath("$.email").value("arjun@example.com"))
                 .andExpect(jsonPath("$.role").value("PLAYER"))
                 .andExpect(jsonPath("$.status").value("active"))
@@ -60,7 +72,7 @@ class UserControllerTests {
 
     @Test
     void readsUpdatesAndSoftDeletesUser() throws Exception {
-        Long id = createId(details("+919876543210", "arjun@example.com"));
+        Long id = createId(details("9876543210", "arjun@example.com"));
         User existing = userRepository.findById(id).orElseThrow();
         String originalHash = existing.getPasswordHash();
         userRepository.saveAndFlush(existing);
@@ -68,7 +80,7 @@ class UserControllerTests {
         mvc.perform(get("/api/users/{id}", id))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.userId").value(org.hamcrest.Matchers.is(id), Long.class));
 
-        Map<String, Object> update = details("+919876543211", "new@example.com");
+        Map<String, Object> update = details("9876543211", "new@example.com");
         update.put("fullName", "Arjun Updated");
         update.remove("password");
         update.put("status", "blocked");
@@ -93,8 +105,8 @@ class UserControllerTests {
 
     @Test
     void replacesPasswordWhenProvided() throws Exception {
-        Long id = createId(details("+919876543210", null));
-        Map<String, Object> update = details("+919876543210", null);
+        Long id = createId(details("9876543210", null));
+        Map<String, Object> update = details("9876543210", null);
         update.put("password", "Replacement123!");
         mvc.perform(put("/api/users/player/{id}", id).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(update)))
                 .andExpect(status().isOk());
@@ -102,17 +114,17 @@ class UserControllerTests {
     }
 
     @Test
-    void rejectsDuplicateContactAndNormalizesInternationalPhone() throws Exception {
-        createId(details("+919876543210", "arjun@example.com"));
-        create(details("919876543210", "other@example.com")).andExpect(status().isConflict());
-        create(details("+919876543211", "ARJUN@example.com")).andExpect(status().isConflict());
+    void rejectsDuplicateContact() throws Exception {
+        createId(details("9876543210", "arjun@example.com"));
+        create(details("9876543210", "other@example.com")).andExpect(status().isConflict());
+        create(details("9876543211", "ARJUN@example.com")).andExpect(status().isConflict());
     }
 
     @Test
     void rejectsConflictingUpdatesButAllowsUnchangedContact() throws Exception {
-        Long first = createId(details("+919876543210", "one@example.com"));
-        Long second = createId(details("+919876543211", "two@example.com"));
-        Map<String, Object> update = details("+919876543210", "one@example.com");
+        Long first = createId(details("9876543210", "one@example.com"));
+        Long second = createId(details("9876543211", "two@example.com"));
+        Map<String, Object> update = details("9876543210", "one@example.com");
         update.remove("password");
         mvc.perform(put("/api/users/player/{id}", first).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(update)))
                 .andExpect(status().isOk());
@@ -122,8 +134,8 @@ class UserControllerTests {
 
     @Test
     void allowsDifferentUsersWithoutEmail() throws Exception {
-        create(details("+919876543210", null)).andExpect(status().isCreated());
-        create(details("+919876543211", "")).andExpect(status().isCreated());
+        create(details("9876543210", null)).andExpect(status().isCreated());
+        create(details("9876543211", "")).andExpect(status().isCreated());
     }
 
     @Test
@@ -132,7 +144,7 @@ class UserControllerTests {
         invalid.put("fullName", " ");
         invalid.put("password", "short");
         create(invalid).andExpect(status().isBadRequest()).andExpect(jsonPath("$.fieldErrors.phone").exists());
-        Map<String, Object> unicode = details("+919876543210", null);
+        Map<String, Object> unicode = details("9876543210", null);
         unicode.put("password", "अ".repeat(25));
         create(unicode).andExpect(status().isBadRequest());
     }
@@ -140,7 +152,7 @@ class UserControllerTests {
     @ParameterizedTest
     @CsvSource({"appOwner, APP_OWNER", "venueOwner, VENUE_OWNER", "player, PLAYER"})
     void roleSpecificRequestsAssignTheEndpointRoleAndValidateInput(String endpoint, String expectedRole) throws Exception {
-        Map<String, Object> request = details("+919876543210", null);
+        Map<String, Object> request = details("9876543210", null);
         request.put("role", "UNTRUSTED_ROLE");
         mvc.perform(post("/api/users/" + endpoint).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(request)))
@@ -157,7 +169,7 @@ class UserControllerTests {
     @ParameterizedTest
     @CsvSource({"appOwner, APP_OWNER", "venueOwner, VENUE_OWNER", "player, PLAYER"})
     void reusesRoleRequestForUpdatesAndRequiresPasswordOnlyOnCreation(String endpoint, String expectedRole) throws Exception {
-        Map<String, Object> request = details("+919876543210", null);
+        Map<String, Object> request = details("9876543210", null);
         request.remove("password");
         mvc.perform(post("/api/users/" + endpoint).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(request)))
@@ -186,8 +198,8 @@ class UserControllerTests {
 
     @Test
     void cannotDeleteThroughUpdateOrSupplyBlankPassword() throws Exception {
-        Long id = createId(details("+919876543210", null));
-        Map<String, Object> update = details("+919876543210", null);
+        Long id = createId(details("9876543210", null));
+        Map<String, Object> update = details("9876543210", null);
         update.put("status", "deleted");
         mvc.perform(put("/api/users/player/{id}", id).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(update)))
                 .andExpect(status().isBadRequest());
@@ -211,9 +223,9 @@ class UserControllerTests {
 
     @Test
     @WithAnonymousUser
-    void existingBasicAuthenticationStillWorks() throws Exception {
+    void basicAuthenticationCannotReplaceBearerToken() throws Exception {
         mvc.perform(get("/api/users/all").with(httpBasic("test-admin", "test-only-password")))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnauthorized());
     }
 
     private Map<String, Object> details(String phone, String email) {

@@ -20,7 +20,7 @@ Create request:
 ```json
 {
   "fullName": "Arjun Kumar",
-  "phone": "+919876543210",
+  "phone": "9876543210",
   "email": "arjun@example.com",
   "password": "StrongPass123!"
 }
@@ -30,14 +30,29 @@ There are three independent request DTOs: `AppOwnerRequestDTO`, `VenueOwnerReque
 
 POST requires `fullName`, `phone`, and `password` and creates an ACTIVE account. The `Create` validation group includes the default constraints and adds the password requirement. PUT requires `fullName` and `phone`; omitting the password preserves the current hash. An omitted or empty email clears the email. An omitted status is preserved; a supplied status may be `ACTIVE` or `BLOCKED`. Use DELETE for deletion.
 
-Passwords require at least 8 characters and at most 72 UTF-8 bytes. They are BCrypt hashed and never returned. Phone numbers are stored with a leading `+`; callers should supply the country code. Email is stored in lowercase. Duplicate contact details return 409; invalid requests return 400; missing or deleted users return 404. Deleted users retain contact uniqueness to preserve historical identity.
+Passwords require at least 8 characters and at most 72 UTF-8 bytes. They are BCrypt hashed and never returned. Phone numbers are stored as supplied; no country code or + prefix is added or required. Email is stored in lowercase. Duplicate contact details return 409; invalid requests return 400; missing or deleted users return 404. Deleted users retain contact uniqueness to preserve historical identity.
 
 ## Database setup
 
 Set `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`. For a new PostgreSQL database, run `scripts/sql/roles.sql` first, then `scripts/sql/users.sql`. The role script inserts APP_OWNER, VENUE_OWNER, and PLAYER. Both tables use BIGINT identity primary keys; users.role_id references roles.id. Role names and user statuses are strings, with lowercase statuses. Verification timestamp columns are omitted. Hibernate automatic DDL is disabled. These creation scripts do not convert an existing UUID schema.
 
-## Security and testing
+## Login and security
 
-Existing Spring Security defaults remain enabled. This change adds no login, public registration, role authorization, or JWT endpoints. Calls require the existing configured Spring Security credentials; mutations also require a valid CSRF token under the default filter chain. Newly created database users are not automatically Spring Security login accounts. Treat these as administrative CRUD endpoints until the application's authentication and role rules are implemented.
+Set `JWT_SECRET` to a randomly generated secret of at least 32 bytes before starting the app. There is no default production secret. `JWT_EXPIRATION_SECONDS` defaults to 3600 (one hour). ProjectS was used as a reference for JJWT token signing and bearer authentication.
 
-Run `./mvnw.cmd test` from the nested BoxProject directory. Integration tests use an isolated H2 database and exercise controller validation, service behavior, JPA persistence, password hashing, duplicates, updates, soft deletion, and the existing authentication boundary. They do not connect to your PostgreSQL database.
+Send `POST /api/auth/login` with JSON:
+
+```json
+{"email":"player@example.com","password":"StrongPass123!"}
+```
+
+Email matching is case-insensitive. A successful response contains `token`, `tokenType` (`Bearer`), `expiresIn` in seconds, and `user` details. Password hashes are never returned. Invalid credentials, blocked accounts, and deleted accounts return 401 with the same message. Invalid input returns 400.
+
+For protected requests, send `Authorization: Bearer <token>`. Tokens contain the numeric user ID as subject, role, issuer, issue time, and expiry. Signature and expiration are checked, and current account status is checked on every request. Blocking or deleting a user also rejects their existing tokens. Authentication is stateless: session cookies, HTTP Basic, form login, and CSRF tokens are not used. Access tokens are sent explicitly in the Authorization header.
+
+Login and POST registration routes (/api/users, /api/users/player, /api/users/venueOwner, /api/users/appOwner) are public. Anyone can register any of these roles, including APP_OWNER. Read, update, and delete routes require authentication; ownership and role-based authorization rules are not implemented. Accounts need a non-null email and a BCrypt password hash to log in. Register the initial account through a public registration route. There is no refresh-token or logout revocation endpoint; access tokens expire automatically.
+
+## Testing
+
+Run `./mvnw.cmd test` from the nested BoxProject directory. Tests use an isolated H2 database and a test-only JWT signing secret. They cover user CRUD, login, password validation, stateless bearer authentication, invalid/expired/forged tokens, and blocked/deleted accounts. They do not connect to your PostgreSQL database.
+

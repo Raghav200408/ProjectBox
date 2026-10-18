@@ -16,6 +16,10 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<ApiErrorDTO> handleBadCredentials(Exception exception) {
+        return error(HttpStatus.UNAUTHORIZED, "Invalid email or password.", Map.of());
+    }
 
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<ApiErrorDTO> handleNotFound(UserNotFoundException exception) {

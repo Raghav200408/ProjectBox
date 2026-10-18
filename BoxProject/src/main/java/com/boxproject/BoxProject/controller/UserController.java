@@ -39,6 +39,8 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.createPlayer(request));
     }
 
+
+
     @GetMapping("/all")
     public ResponseEntity<List<UserResponseDTO>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
