@@ -1,6 +1,7 @@
 package com.boxproject.BoxProject.exception;
 
 import com.boxproject.BoxProject.model.ApiErrorDTO;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,15 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
     }
 
+    @ExceptionHandler({
+            VenueNotFoundException.class,
+            VenueMemberNotFoundException.class,
+            AmenityNotFoundException.class
+    })
+    public ResponseEntity<ApiErrorDTO> handleVenueNotFound(RuntimeException exception) {
+        return error(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
     @ExceptionHandler(DuplicateUserException.class)
     public ResponseEntity<ApiErrorDTO> handleDuplicate(DuplicateUserException exception) {
         return error(HttpStatus.CONFLICT, exception.getMessage(), Map.of());
@@ -33,7 +43,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorDTO> handleConstraintConflict(DataIntegrityViolationException exception) {
-        return error(HttpStatus.CONFLICT, "User data conflicts with an existing record.", Map.of());
+        return error(
+                HttpStatus.CONFLICT,
+                "The request conflicts with an existing record or references missing data.",
+                Map.of()
+        );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -41,12 +55,26 @@ public class GlobalExceptionHandler {
         Map<String, String> fields = new LinkedHashMap<>();
         exception.getBindingResult().getFieldErrors()
                 .forEach(field -> fields.putIfAbsent(field.getField(), field.getDefaultMessage()));
-        return error(HttpStatus.BAD_REQUEST, "Invalid user details.", fields);
+        return error(HttpStatus.BAD_REQUEST, "Invalid request details.", fields);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorDTO> handleConstraintValidation(
+            ConstraintViolationException exception
+    ) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        exception.getConstraintViolations().forEach(violation ->
+                fields.put(violation.getPropertyPath().toString(), violation.getMessage()));
+        return error(HttpStatus.BAD_REQUEST, "Invalid request details.", fields);
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ApiErrorDTO> handleInvalidRequest(Exception exception) {
-        return error(HttpStatus.BAD_REQUEST, "Invalid request body, enum value, or user ID.", Map.of());
+        return error(
+                HttpStatus.BAD_REQUEST,
+                "Invalid request body, parameter value, or identifier.",
+                Map.of()
+        );
     }
 
     private ResponseEntity<ApiErrorDTO> error(HttpStatus status, String message, Map<String, String> fields) {
