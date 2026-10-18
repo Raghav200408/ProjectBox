@@ -1,9 +1,11 @@
 package com.boxproject.BoxProject.service;
 
+import com.boxproject.BoxProject.entity.User;
+import com.boxproject.BoxProject.entity.Venue;
+import com.boxproject.BoxProject.entity.VenueMember;
 import com.boxproject.BoxProject.exception.UserNotFoundException;
 import com.boxproject.BoxProject.exception.VenueMemberNotFoundException;
 import com.boxproject.BoxProject.exception.VenueNotFoundException;
-import com.boxproject.BoxProject.entity.VenueMember;
 import com.boxproject.BoxProject.model.VenueMemberRequestDTO;
 import com.boxproject.BoxProject.model.VenueMemberResponseDTO;
 import com.boxproject.BoxProject.repository.UserRepository;
@@ -36,9 +38,11 @@ public class VenueMemberService {
             Long venueId,
             VenueMemberRequestDTO request
     ) {
-        requireVenue(venueId);
-        requireUser(request.getUserId());
-        return toResponse(memberRepository.create(venueId, request));
+        VenueMember member = new VenueMember();
+        member.setVenue(requireVenue(venueId));
+        member.setUser(requireUser(request.getUserId()));
+        applyRequest(member, request);
+        return toResponse(memberRepository.save(member));
     }
 
     @Transactional(readOnly = true)
@@ -47,16 +51,16 @@ public class VenueMemberService {
             boolean activeOnly
     ) {
         requireVenue(venueId);
-        return memberRepository.findAll(venueId, activeOnly)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        List<VenueMember> members = activeOnly
+                ? memberRepository.findAllByVenueIdAndActiveTrueOrderByCreatedAtAscIdAsc(venueId)
+                : memberRepository.findAllByVenueIdOrderByCreatedAtAscIdAsc(venueId);
+        return members.stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
     public VenueMemberResponseDTO getMember(Long venueId, Long memberId) {
         requireVenue(venueId);
-        return memberRepository.findById(venueId, memberId)
+        return findMember(venueId, memberId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new VenueMemberNotFoundException(memberId));
     }
@@ -67,30 +71,41 @@ public class VenueMemberService {
             VenueMemberRequestDTO request
     ) {
         requireVenue(venueId);
-        requireUser(request.getUserId());
-        return memberRepository.update(venueId, memberId, request)
-                .map(this::toResponse)
+        VenueMember member = findMember(venueId, memberId)
                 .orElseThrow(() -> new VenueMemberNotFoundException(memberId));
+        member.setUser(requireUser(request.getUserId()));
+        applyRequest(member, request);
+        return toResponse(memberRepository.save(member));
     }
 
     public void deleteMember(Long venueId, Long memberId) {
         requireVenue(venueId);
-        if (memberRepository.findById(venueId, memberId).isEmpty()) {
-            throw new VenueMemberNotFoundException(memberId);
-        }
-        memberRepository.deactivate(venueId, memberId);
+        VenueMember member = findMember(venueId, memberId)
+                .orElseThrow(() -> new VenueMemberNotFoundException(memberId));
+        member.setActive(false);
+        memberRepository.save(member);
     }
 
-    private void requireVenue(Long venueId) {
-        if (!venueRepository.existsActiveById(venueId)) {
-            throw new VenueNotFoundException(venueId);
-        }
+    private java.util.Optional<VenueMember> findMember(Long venueId, Long memberId) {
+        return memberRepository.findByIdAndVenueId(memberId, venueId);
     }
 
-    private void requireUser(Long userId) {
-        if (userRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty()) {
-            throw new UserNotFoundException(userId);
-        }
+    private Venue requireVenue(Long venueId) {
+        return venueRepository.findByIdAndDeletedAtIsNull(venueId)
+                .orElseThrow(() -> new VenueNotFoundException(venueId));
+    }
+
+    private User requireUser(Long userId) {
+        return userRepository.findByUserIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+    }
+
+    private static void applyRequest(
+            VenueMember member,
+            VenueMemberRequestDTO request
+    ) {
+        member.setMemberType(request.getMemberType());
+        member.setActive(request.getActive() == null || request.getActive());
     }
 
     private VenueMemberResponseDTO toResponse(VenueMember member) {

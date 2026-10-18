@@ -1,5 +1,7 @@
 package com.boxproject.BoxProject.service;
 
+import com.boxproject.BoxProject.entity.Amenity;
+import com.boxproject.BoxProject.entity.Venue;
 import com.boxproject.BoxProject.entity.VenueAmenity;
 import com.boxproject.BoxProject.exception.AmenityNotFoundException;
 import com.boxproject.BoxProject.exception.VenueNotFoundException;
@@ -35,12 +37,10 @@ public class VenueAmenityService {
             Long venueId,
             VenueAmenityRequestDTO request
     ) {
-        requireVenue(venueId);
-        requireActiveAmenity(request.getAmenityId());
-        venueAmenityRepository.create(venueId, request.getAmenityId());
-        return venueAmenityRepository.findById(venueId, request.getAmenityId())
-                .map(this::toResponse)
-                .orElseThrow(() -> new AmenityNotFoundException(request.getAmenityId()));
+        VenueAmenity assignment = new VenueAmenity();
+        assignment.setVenue(requireVenue(venueId));
+        assignment.setAmenity(requireActiveAmenity(request.getAmenityId()));
+        return toResponse(venueAmenityRepository.save(assignment));
     }
 
     @Transactional(readOnly = true)
@@ -49,29 +49,31 @@ public class VenueAmenityService {
             boolean activeOnly
     ) {
         requireVenue(venueId);
-        return venueAmenityRepository.findAll(venueId, activeOnly)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        List<VenueAmenity> assignments = activeOnly
+                ? venueAmenityRepository
+                        .findAllByVenueIdAndAmenityActiveTrueOrderByAmenityNameAscAmenityIdAsc(
+                                venueId
+                        )
+                : venueAmenityRepository
+                        .findAllByVenueIdOrderByAmenityNameAscAmenityIdAsc(venueId);
+        return assignments.stream().map(this::toResponse).toList();
     }
 
     public void removeAmenity(Long venueId, Long amenityId) {
         requireVenue(venueId);
-        if (!venueAmenityRepository.delete(venueId, amenityId)) {
+        if (venueAmenityRepository.deleteByVenueIdAndAmenityId(venueId, amenityId) == 0) {
             throw new AmenityNotFoundException(amenityId);
         }
     }
 
-    private void requireVenue(Long venueId) {
-        if (!venueRepository.existsActiveById(venueId)) {
-            throw new VenueNotFoundException(venueId);
-        }
+    private Venue requireVenue(Long venueId) {
+        return venueRepository.findByIdAndDeletedAtIsNull(venueId)
+                .orElseThrow(() -> new VenueNotFoundException(venueId));
     }
 
-    private void requireActiveAmenity(Long amenityId) {
-        if (amenityRepository.findActiveById(amenityId).isEmpty()) {
-            throw new AmenityNotFoundException(amenityId);
-        }
+    private Amenity requireActiveAmenity(Long amenityId) {
+        return amenityRepository.findByIdAndActiveTrue(amenityId)
+                .orElseThrow(() -> new AmenityNotFoundException(amenityId));
     }
 
     private VenueAmenityResponseDTO toResponse(VenueAmenity venueAmenity) {
