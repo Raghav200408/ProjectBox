@@ -10,7 +10,7 @@ public class BoxProjectApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(BoxProjectApplication.class, args);
 
-		System.out.println("hello world");
+
 	}
 
 }
