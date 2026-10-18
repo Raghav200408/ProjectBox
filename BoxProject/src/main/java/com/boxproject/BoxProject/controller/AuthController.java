@@ -22,6 +22,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(@Valid @RequestBody LoginRequestDTO request) {
+        System.out.println("login entered");
         var user = userService.login(request);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(new LoginResponseDTO(jwtUtil.generateToken(user), "Bearer", jwtUtil.getExpirationSeconds(), user));
