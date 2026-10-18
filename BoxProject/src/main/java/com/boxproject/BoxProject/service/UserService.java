@@ -10,6 +10,8 @@ import com.boxproject.BoxProject.model.AppOwnerRequestDTO;
 import com.boxproject.BoxProject.model.VenueOwnerRequestDTO;
 import com.boxproject.BoxProject.model.PlayerRequestDTO;
 import com.boxproject.BoxProject.model.UserResponseDTO;
+import com.boxproject.BoxProject.model.LoginRequestDTO;
+import org.springframework.security.authentication.BadCredentialsException;
 import com.boxproject.BoxProject.repository.UserRepository;
 import com.boxproject.BoxProject.repository.RoleRepository;
 import com.boxproject.BoxProject.security.PasswordHasher;
@@ -28,11 +30,24 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final RoleRepository roleRepository;
+    private final String dummyPasswordHash;
 
     public UserService(UserRepository userRepository, PasswordHasher passwordHasher, RoleRepository roleRepository) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.roleRepository = roleRepository;
+        this.dummyPasswordHash = passwordHasher.hash("invalid-account-password");
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponseDTO login(LoginRequestDTO request) {
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.getEmail().trim()).orElse(null);
+        boolean passwordMatches = passwordHasher.matches(request.getPassword(),
+                user == null ? dummyPasswordHash : user.getPasswordHash());
+        if (user == null || !passwordMatches || !UserStatus.ACTIVE.equals(user.getStatus())) {
+            throw new BadCredentialsException("Invalid email or password.");
+        }
+        return convertToResponse(user);
     }
 
     public UserResponseDTO createAppOwner(AppOwnerRequestDTO request) {
@@ -137,8 +152,7 @@ public class UserService {
     }
 
     private String normalizePhone(String phone) {
-        // Treat international numbers with and without the optional + as the same contact.
-        return "+" + phone.replaceFirst("^\\+", "");
+        return phone.trim();
     }
 
     private UserResponseDTO convertToResponse(User user) {

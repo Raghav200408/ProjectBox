@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class PasswordHasher {
 
-    // Keep account hashing separate from Spring Security's existing login configuration.
+    // Use the same BCrypt encoding for account creation and login verification.
     private final PasswordEncoder encoder = new BCryptPasswordEncoder();
 
     public String hash(String password) {
