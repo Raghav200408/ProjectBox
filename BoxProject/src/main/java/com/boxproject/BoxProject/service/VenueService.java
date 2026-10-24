@@ -1,6 +1,21 @@
 package com.boxproject.BoxProject.service;
 
 import com.boxproject.BoxProject.entity.Venue;
+import com.boxproject.BoxProject.entity.User;
+import com.boxproject.BoxProject.entity.SportType;
+import com.boxproject.BoxProject.entity.VenueSport;
+import com.boxproject.BoxProject.entity.VenueMember;
+import com.boxproject.BoxProject.entity.Amenity;
+import com.boxproject.BoxProject.entity.VenueAmenity;
+import com.boxproject.BoxProject.repository.UserRepository;
+import com.boxproject.BoxProject.repository.SportTypeRepository;
+import com.boxproject.BoxProject.repository.VenueSportRepository;
+import com.boxproject.BoxProject.repository.VenueMemberRepository;
+import com.boxproject.BoxProject.repository.AmenityRepository;
+import com.boxproject.BoxProject.repository.VenueAmenityRepository;
+import java.util.ArrayList;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import com.boxproject.BoxProject.exception.VenueNotFoundException;
 import com.boxproject.BoxProject.model.VenueRequestDTO;
 import com.boxproject.BoxProject.model.VenueResponseDTO;
@@ -25,14 +40,68 @@ public class VenueService {
 
     private final VenueRepository venueRepository;
 
-    public VenueService(VenueRepository venueRepository) {
+    private final UserRepository userRepository;
+    private final VenueMemberRepository memberRepository;
+    private final AmenityRepository amenityRepository;
+    private final VenueAmenityRepository venueAmenityRepository;
+    private final SportTypeRepository sportTypeRepository;
+    private final VenueSportRepository venueSportRepository;
+
+    public VenueService(VenueRepository venueRepository, UserRepository userRepository,
+                        VenueMemberRepository memberRepository, AmenityRepository amenityRepository,
+                        VenueAmenityRepository venueAmenityRepository, SportTypeRepository sportTypeRepository,
+                        VenueSportRepository venueSportRepository) {
         this.venueRepository = venueRepository;
+        this.userRepository = userRepository;
+        this.memberRepository = memberRepository;
+        this.amenityRepository = amenityRepository;
+        this.venueAmenityRepository = venueAmenityRepository;
+        this.sportTypeRepository = sportTypeRepository;
+        this.venueSportRepository = venueSportRepository;
     }
 
     public VenueResponseDTO createVenue(VenueRequestDTO request) {
+        User owner = userRepository.findByUserIdAndDeletedAtIsNull(request.getOwnerUserId())
+                .filter(user -> "active".equals(user.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Owner must reference an existing active user."));
+        List<SportType> sports = sportTypeRepository.findAllById(request.getSportTypeIds());
+        if (sports.size() != request.getSportTypeIds().size() || sports.stream().anyMatch(sport -> !sport.isActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select existing active sports without duplicates.");
+        }
+        List<Long> amenityIds = request.getAmenityIds() == null ? List.of() : request.getAmenityIds();
+        List<Amenity> amenities = amenityRepository.findAllById(amenityIds);
+        if (amenities.size() != amenityIds.size() || amenities.stream().anyMatch(amenity -> !amenity.isActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select existing active amenities without duplicates.");
+        }
         Venue venue = new Venue();
         applyRequest(venue, request);
-        return toResponse(venueRepository.save(venue));
+        venue.setStatus("active");
+        venueRepository.save(venue);
+        List<VenueSport> sportAssignments = new ArrayList<>();
+        for (SportType sport : sports) {
+            VenueSport assignment = new VenueSport();
+            assignment.setVenue(venue);
+            assignment.setSportType(sport);
+            sportAssignments.add(assignment);
+        }
+        venueSportRepository.saveAll(sportAssignments);
+
+        VenueMember member = new VenueMember();
+        member.setVenue(venue);
+        member.setUser(owner);
+        member.setMemberType("owner");
+        member.setActive(true);
+        memberRepository.save(member);
+
+        List<VenueAmenity> assignments = new ArrayList<>();
+        for (Amenity amenity : amenities) {
+            VenueAmenity assignment = new VenueAmenity();
+            assignment.setVenue(venue);
+            assignment.setAmenity(amenity);
+            assignments.add(assignment);
+        }
+        venueAmenityRepository.saveAll(assignments);
+        return toResponse(venue);
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +153,11 @@ public class VenueService {
         venueRepository.save(venue);
     }
 
+    @Transactional(readOnly = true)
+    public List<SportType> getSports() {
+        return sportTypeRepository.findAllByActiveTrueOrderByNameAscIdAsc();
+    }
+
     private Venue requireVenue(Long venueId) {
         return venueRepository.findByIdAndDeletedAtIsNull(venueId)
                 .orElseThrow(() -> new VenueNotFoundException(venueId));
@@ -124,7 +198,7 @@ public class VenueService {
                 ? venue.getLongitude()
                 : BigDecimal.valueOf(location.getX());
 
-        return new VenueResponseDTO(
+        VenueResponseDTO response = new VenueResponseDTO(
                 venue.getId(),
                 venue.getName(),
                 venue.getDescription(),
@@ -143,6 +217,14 @@ public class VenueService {
                 venue.getCreatedAt(),
                 venue.getUpdatedAt()
         );
+        response.setSportTypeIds(venueSportRepository.findAllByVenueIdOrderBySportTypeIdAsc(venue.getId())
+                .stream().map(assignment -> assignment.getSportType().getId()).toList());
+        response.setOwnerUserId(memberRepository.findAllByVenueIdAndActiveTrueOrderByCreatedAtAscIdAsc(venue.getId())
+                .stream().filter(member -> "owner".equals(member.getMemberType()))
+                .map(member -> member.getUser().getUserId()).findFirst().orElse(null));
+        response.setAmenityIds(venueAmenityRepository.findAllByVenueIdOrderByAmenityNameAscAmenityIdAsc(venue.getId())
+                .stream().map(assignment -> assignment.getAmenity().getId()).toList());
+        return response;
     }
 
     private static String trimToNull(String value) {
