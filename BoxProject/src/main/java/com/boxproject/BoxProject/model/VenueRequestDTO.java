@@ -11,10 +11,37 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.HashSet;
+import com.boxproject.BoxProject.validation.Create;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Null;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.AssertTrue;
 
 @Getter
 @Setter
 public class VenueRequestDTO {
+    public interface Update {}
+
+    @NotNull(groups = Create.class, message = "Owner user ID is required.")
+    @Positive
+    @Null(groups = Update.class, message = "Use the membership API to change the owner.")
+    private Long ownerUserId;
+
+    @NotEmpty(groups = Create.class, message = "Select at least one sport.")
+    @Null(groups = Update.class, message = "Sports cannot be changed through the profile update API.")
+    private List<@NotNull @Positive Long> sportTypeIds;
+
+    @Null(groups = Update.class, message = "Use the amenities API to change amenities.")
+    private List<@NotNull @Positive Long> amenityIds;
+
+    @AssertTrue(message = "Sport and amenity IDs must not contain duplicates.")
+    public boolean isSelectionUnique() {
+        return (sportTypeIds == null || new HashSet<>(sportTypeIds).size() == sportTypeIds.size())
+                && (amenityIds == null || new HashSet<>(amenityIds).size() == amenityIds.size());
+    }
+
 
     @NotBlank(message = "Venue name is required.")
     @Size(max = 150)

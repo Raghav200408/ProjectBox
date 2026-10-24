@@ -77,6 +77,11 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ApiErrorDTO> handleRequestStatus(org.springframework.web.server.ResponseStatusException exception) {
+        return error(HttpStatus.valueOf(exception.getStatusCode().value()), exception.getReason(), Map.of());
+    }
+
     private ResponseEntity<ApiErrorDTO> error(HttpStatus status, String message, Map<String, String> fields) {
         return ResponseEntity.status(status).body(new ApiErrorDTO(Instant.now(), status.value(), message, fields));
     }
