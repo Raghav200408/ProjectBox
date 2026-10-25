@@ -54,6 +54,9 @@ public class Venue {
     @Column(nullable = false)
     private Point location;
 
+    @Column(name = "location_url", columnDefinition = "TEXT")
+    private String locationUrl;
+
     // API-facing coordinate values derived from the persisted location point.
     @Transient
     private BigDecimal latitude;

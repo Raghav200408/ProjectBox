@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS venues (
     state               VARCHAR(100) NOT NULL,
     postal_code         VARCHAR(10) NOT NULL,
     location            GEOGRAPHY(POINT, 4326) NOT NULL,
+    location_url        TEXT,
     timezone            VARCHAR(50) NOT NULL DEFAULT 'Asia/Kolkata',
     status              VARCHAR(30) NOT NULL DEFAULT 'draft',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),

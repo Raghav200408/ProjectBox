@@ -174,6 +174,7 @@ public class VenueService {
         venue.setCity(request.getCity().trim());
         venue.setState(request.getState().trim());
         venue.setPostalCode(request.getPostalCode().trim());
+        venue.setLocationUrl(trimToNull(request.getLocationUrl()));
         venue.setLocation(toPoint(request.getLatitude(), request.getLongitude()));
         venue.setLatitude(request.getLatitude());
         venue.setLongitude(request.getLongitude());
@@ -210,6 +211,7 @@ public class VenueService {
                 venue.getCity(),
                 venue.getState(),
                 venue.getPostalCode(),
+                venue.getLocationUrl(),
                 latitude,
                 longitude,
                 venue.getTimezone(),
