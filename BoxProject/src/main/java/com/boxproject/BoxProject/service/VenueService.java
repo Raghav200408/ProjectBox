@@ -190,7 +190,7 @@ public class VenueService {
         return point;
     }
 
-    private VenueResponseDTO toResponse(Venue venue) {
+    VenueResponseDTO toResponse(Venue venue) {
         Point location = venue.getLocation();
         BigDecimal latitude = location == null
                 ? venue.getLatitude()
