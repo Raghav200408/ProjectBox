@@ -28,6 +28,7 @@ public class VenueResponseDTO {
     private final String city;
     private final String state;
     private final String postalCode;
+    private final String locationUrl;
     private final BigDecimal latitude;
     private final BigDecimal longitude;
     private final String timezone;

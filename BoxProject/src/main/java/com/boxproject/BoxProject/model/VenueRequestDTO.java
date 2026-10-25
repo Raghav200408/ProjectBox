@@ -80,6 +80,9 @@ public class VenueRequestDTO {
     @Size(max = 10)
     private String postalCode;
 
+    @org.hibernate.validator.constraints.URL(protocol = "https", message = "Enter a valid HTTPS location URL.")
+    private String locationUrl;
+
     @NotNull(message = "Latitude is required.")
     @DecimalMin(value = "-90.0")
     @DecimalMax(value = "90.0")
