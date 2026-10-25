@@ -42,7 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .filter(account -> UserStatus.ACTIVE.equals(account.getStatus()))
                         .orElseThrow(() -> new IllegalArgumentException("Inactive account."));
                 var authentication = UsernamePasswordAuthenticationToken.authenticated(
-                        id.toString(), null, List.of(new SimpleGrantedAuthority("ROLE_" + claims.get("role", String.class))));
+                        id.toString(), null, List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().getName())));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (JwtException | IllegalArgumentException exception) {
                 SecurityContextHolder.clearContext();

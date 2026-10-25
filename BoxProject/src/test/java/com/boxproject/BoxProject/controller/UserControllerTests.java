@@ -29,19 +29,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {"spring.security.user.name=test-admin", "spring.security.user.password=test-only-password"})
 @AutoConfigureMockMvc
-@WithMockUser
+@WithMockUser(roles = "APP_OWNER")
 @Transactional
 class UserControllerTests {
     @ParameterizedTest
-    @CsvSource({"/api/users, PLAYER", "/api/users/player, PLAYER",
-            "/api/users/venueOwner, VENUE_OWNER", "/api/users/appOwner, APP_OWNER"})
+    @CsvSource({"/api/users, PLAYER", "/api/users/player, PLAYER"})
     @WithAnonymousUser
     void registrationIsAccessibleWithoutToken(String endpoint, String role) throws Exception {
         mvc.perform(post(endpoint).contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(details("9876543210", "register@example.com"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value(role));
-        mvc.perform(get("/api/users/all")).andExpect(status().isOk());
+        mvc.perform(get("/api/users/all")).andExpect(status().isUnauthorized());
     }
 
     @Autowired private MockMvc mvc;
@@ -217,15 +216,15 @@ class UserControllerTests {
 
     @Test
     @WithAnonymousUser
-    void endpointsArePublicDuringDevelopment() throws Exception {
-        mvc.perform(get("/api/users/all").accept(MediaType.APPLICATION_JSON)).andExpect(status().isOk());
+    void userListRequiresAuthentication() throws Exception {
+        mvc.perform(get("/api/users/all").accept(MediaType.APPLICATION_JSON)).andExpect(status().isUnauthorized());
     }
 
     @Test
     @WithAnonymousUser
-    void publicEndpointsDoNotRequireBearerAuthentication() throws Exception {
+    void basicAuthenticationCannotBypassBearerAuthentication() throws Exception {
         mvc.perform(get("/api/users/all").with(httpBasic("test-admin", "test-only-password")))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnauthorized());
     }
 
     private Map<String, Object> details(String phone, String email) {
